@@ -226,7 +226,7 @@ def nombre_tienda(row):
     for c in ["name", "nombre", "id_tienda", "tienda", "cr"]:
         if c in row.index and pd.notna(row[c]) and str(row[c]).strip() != "":
             return str(row[c])
-    return f"Tienda #{row.name}"
+    return f"Tienda {row.NAME}"
 
 
 # ─────────────────────────────────────────────
