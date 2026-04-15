@@ -342,54 +342,176 @@ COLORES = ["#f87171","#fbbf24","#fb923c","#e879f9","#a78bfa","#34d399","#60a5fa"
 st.markdown(f"<div class='section-header'>{len(ta)} tienda(s) dentro del radio de {r} m</div>",
             unsafe_allow_html=True)
 
-m = folium.Map(
-    location=[(df["latitud"].mean()+lat_b_)/2, (df["longitud"].mean()+lon_b_)/2],
-    zoom_start=15, tiles="CartoDB dark_matter"
-)
+# Centro del mapa: promedio de todos los puntos visibles
+todas_lats = list(df["latitud"]) + [lat_b_]
+todas_lons = list(df["longitud"]) + [lon_b_]
+centro = [np.mean(todas_lats), np.mean(todas_lons)]
 
-# Tiendas NO afectadas (gris)
+m = folium.Map(location=centro, zoom_start=15, tiles="CartoDB dark_matter")
+
+def icono_tienda(color, label=""):
+    """Icono SVG tipo tienda (building) con color y etiqueta"""
+    svg = f"""
+    <div style="position:relative;text-align:center">
+      <div style="
+        background:{color};
+        border:2px solid white;
+        border-radius:6px 6px 0 0;
+        width:28px;height:22px;
+        display:flex;align-items:center;justify-content:center;
+        box-shadow:0 2px 6px rgba(0,0,0,0.5)">
+        <svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24'
+             fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'>
+          <path d='M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'/>
+          <polyline points='9 22 9 12 15 12 15 22'/>
+        </svg>
+      </div>
+      <div style="
+        width:0;height:0;
+        border-left:6px solid transparent;
+        border-right:6px solid transparent;
+        border-top:7px solid {color};
+        margin:0 auto">
+      </div>
+      {'<div style="background:rgba(0,0,0,0.75);color:white;font-size:9px;padding:1px 5px;border-radius:3px;white-space:nowrap;margin-top:2px;font-family:monospace">' + label + '</div>' if label else ''}
+    </div>"""
+    return folium.DivIcon(html=svg, icon_size=(28, 46), icon_anchor=(14, 46))
+
+def icono_tienda_gris():
+    """Icono pequeño gris para tiendas no afectadas"""
+    svg = """
+    <div style="
+      background:#4a4a5a;
+      border:1.5px solid #888;
+      border-radius:4px 4px 0 0;
+      width:18px;height:14px;
+      display:flex;align-items:center;justify-content:center;
+      box-shadow:0 1px 4px rgba(0,0,0,0.4)">
+      <svg xmlns='http://www.w3.org/2000/svg' width='9' height='9' viewBox='0 0 24 24'
+           fill='none' stroke='#aaa' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'>
+        <path d='M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'/>
+        <polyline points='9 22 9 12 15 12 15 22'/>
+      </svg>
+    </div>
+    <div style="width:0;height:0;border-left:4px solid transparent;
+      border-right:4px solid transparent;border-top:5px solid #4a4a5a;margin:0 auto"></div>"""
+    return folium.DivIcon(html=svg, icon_size=(18, 22), icon_anchor=(9, 22))
+
+def icono_punto_b(nombre=""):
+    """Icono tipo pin de ubicación verde para el punto potencial"""
+    svg = f"""
+    <div style="position:relative;text-align:center">
+      <div style="
+        background:#22c55e;
+        border:2.5px solid white;
+        border-radius:50% 50% 50% 0;
+        width:32px;height:32px;
+        transform:rotate(-45deg);
+        display:flex;align-items:center;justify-content:center;
+        box-shadow:0 3px 8px rgba(0,0,0,0.5)">
+        <div style="transform:rotate(45deg);display:flex;align-items:center;justify-content:center">
+          <svg xmlns='http://www.w3.org/2000/svg' width='15' height='15' viewBox='0 0 24 24'
+               fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'>
+            <circle cx='12' cy='12' r='3'/>
+            <path d='M12 2v3M12 19v3M2 12h3M19 12h3'/>
+            <path d='M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1'/>
+          </svg>
+        </div>
+      </div>
+      {'<div style="background:rgba(34,197,94,0.9);color:white;font-size:9px;padding:1px 6px;border-radius:3px;white-space:nowrap;margin-top:4px;font-family:monospace;font-weight:600">' + nombre[:20] + '</div>' if nombre else ''}
+    </div>"""
+    return folium.DivIcon(html=svg, icon_size=(32, 52), icon_anchor=(16, 52))
+
+# Tiendas NO afectadas (gris pequeño, sin radio)
 afect_idx = set(ta["_idx"].tolist())
 for _, row in df.iterrows():
     if row.name not in afect_idx:
-        folium.CircleMarker(
+        folium.Marker(
             location=[row["latitud"], row["longitud"]],
-            radius=4, color="#3a3a4a", fill=True,
-            fill_color="#3a3a4a", fill_opacity=0.6,
-            tooltip=nombre_tienda(row)
+            icon=icono_tienda_gris(),
+            tooltip=folium.Tooltip(
+                f"<b>{nombre_tienda(row)}</b><br>Fuera del radio de influencia",
+                style="font-family:monospace;font-size:12px"
+            )
         ).add_to(m)
 
-# Tiendas afectadas con su radio y línea a B
+# Tiendas afectadas: radio + línea a B + icono color
 for i, (_, trow) in enumerate(ta.iterrows()):
     col = COLORES[i % len(COLORES)]
+
+    # Radio de influencia
     folium.Circle(
         location=[trow["latitud_A"], trow["longitud_A"]],
-        radius=r, color=col, fill=True, fill_color=col, fill_opacity=0.10,
-        tooltip=f"{trow['tienda']} — overlap {trow['pct_overlap']:.1f}%"
+        radius=r, color=col, weight=1.5,
+        fill=True, fill_color=col, fill_opacity=0.12,
     ).add_to(m)
-    folium.CircleMarker(
-        location=[trow["latitud_A"], trow["longitud_A"]],
-        radius=7, color=col, fill=True, fill_color=col,
-        tooltip=trow["tienda"]
-    ).add_to(m)
+
+    # Línea distancia a B
     folium.PolyLine(
         [[trow["latitud_A"], trow["longitud_A"]], [lat_b_, lon_b_]],
-        color=col, weight=1.5, dash_array="6",
-        tooltip=f"d = {trow['distancia_m']:.0f} m"
+        color=col, weight=2, dash_array="8 4",
+        tooltip=folium.Tooltip(
+            f"Distancia: <b>{trow['distancia_m']:.0f} m</b>",
+            style="font-family:monospace;font-size:12px"
+        )
     ).add_to(m)
 
-# Punto B
+    # Marcador tienda afectada
+    folium.Marker(
+        location=[trow["latitud_A"], trow["longitud_A"]],
+        icon=icono_tienda(col, trow["tienda"][:12]),
+        tooltip=folium.Tooltip(
+            f"<b>{trow['tienda']}</b><br>"
+            f"Distancia: {trow['distancia_m']:.0f} m<br>"
+            f"Overlap: {trow['pct_overlap']:.1f}%<br>"
+            f"Área lente: {trow['area_lente_m2']:.0f} m²",
+            style="font-family:monospace;font-size:12px"
+        )
+    ).add_to(m)
+
+# Radio del punto B
 folium.Circle(
     location=[lat_b_, lon_b_], radius=r,
-    color="#22c55e", fill=True, fill_color="#22c55e", fill_opacity=0.10,
-    tooltip=f"Punto B: {st.session_state.nombre_b}"
-).add_to(m)
-folium.CircleMarker(
-    location=[lat_b_, lon_b_], radius=9,
-    color="#22c55e", fill=True, fill_color="#22c55e",
-    tooltip=f"B: {st.session_state.nombre_b}"
+    color="#22c55e", weight=2,
+    fill=True, fill_color="#22c55e", fill_opacity=0.08,
+    dash_array="6 3"
 ).add_to(m)
 
-st_folium(m, width=None, height=440, returned_objects=[])
+# Marcador punto B
+folium.Marker(
+    location=[lat_b_, lon_b_],
+    icon=icono_punto_b(st.session_state.nombre_b),
+    tooltip=folium.Tooltip(
+        f"<b>Punto potencial: {st.session_state.nombre_b}</b><br>"
+        f"Radio: {r} m<br>"
+        f"Tiendas en radio: {len(ta)}",
+        style="font-family:monospace;font-size:12px"
+    )
+).add_to(m)
+
+# Leyenda
+leyenda_html = """
+<div style="
+  position:fixed;bottom:20px;right:10px;z-index:1000;
+  background:rgba(15,17,23,0.92);border:1px solid #2a2d3a;
+  border-radius:8px;padding:10px 14px;font-family:monospace;font-size:11px;color:#c8c6bf">
+  <div style="font-weight:600;margin-bottom:6px;color:#e8e6df">Leyenda</div>
+  <div style="display:flex;align-items:center;gap:8px;margin:4px 0">
+    <div style="background:#22c55e;width:12px;height:12px;border-radius:50%"></div>
+    Punto potencial B
+  </div>
+  <div style="display:flex;align-items:center;gap:8px;margin:4px 0">
+    <div style="background:#f87171;width:12px;height:12px;border-radius:3px"></div>
+    Tienda afectada
+  </div>
+  <div style="display:flex;align-items:center;gap:8px;margin:4px 0">
+    <div style="background:#4a4a5a;width:12px;height:12px;border-radius:3px"></div>
+    Tienda sin afectación
+  </div>
+</div>"""
+m.get_root().html.add_child(folium.Element(leyenda_html))
+
+st_folium(m, width="100%", height=480, returned_objects=[], key="mapa_canib")
 
 
 # ── PASO 3: Viviendas por tienda ─────────────
