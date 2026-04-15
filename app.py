@@ -223,10 +223,10 @@ def fmt_s(s):  return f"${s:,.0f}".replace(",", ".")
 def fmt_score(s): return f"{s:.1f}%"
 
 def nombre_tienda(row):
-    for c in ["name", "nombre", "id_tienda", "tienda", "cr"]:
+    for c in ["name", "nombre", "id_tienda", "tienda", "cr","NAME"]:
         if c in row.index and pd.notna(row[c]) and str(row[c]).strip() != "":
             return str(row[c])
-    return f"Tienda {row.NAME}"
+    return f"Tienda #{row.name}"
 
 
 # ─────────────────────────────────────────────
